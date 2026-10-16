@@ -55,6 +55,13 @@ Codice: `tools/executor/` (snap.py, home.py, move.py, laser_cam.py, camera.py, c
 - **Camera della testa (14 ott):** omografia px→mm dai 4 angoli dei tile mappati dalla camera RPi (`tools/executor/head_cam.py`, posa X186 Y130 Z220): 4/5 tile visti (ID 1 mancante), rms 0,17 mm, max 0,35, leave-one-out 0,28–1,23 mm (con 4 tile il LOO è pessimista), 3,40 px/mm, `head_calib.json` sull'RPi. **Distorsione obiettivo della testa non corretta** (servono scatti della carta da questa posa).
 - **Aperto:** se i tile vengono spostati, rifare `calib.py calibrate` a Y=238; calibrazione per altre pose non fatta.
 
+## Stato 2026-10-16
+- Decisione Tommy (16 ott, corretta): OGNI job confermato sullo schermo della Snapmaker (Start sul touchscreen). La mia lettura «#11 falsa» era superficiale: provato solo un job vuoto. #11 = non conclusa. Da capire come Luban fa comparire il file sul touchscreen. Soglie gate 0.5/1.0 confermate. Tommy vuole accesso autonomo a motori e camere; conferma solo per accensione laser/CNC.
+- `core/jobspec.py` (schema 0.1.0, hash sha256 canonico, `gate_blockers`) + `core/test_jobspec.py` (8 test verdi: `cd core && python3 -m pytest`).
+- `tools/taskzero/run.py` (S0-S2 in sola lettura). S1 fallisce se il piano non è a Y=238 (voluto: la registrazione vale solo alla posa home); ora il piano è a Y=130, serve `move.py 0 238 3000` lanciato da Tommy.
+
+- Luban (ConnectionManager.startGcode, ramo Wi-Fi/HTTP SM2) per il laser fa: `execute_code` (G53; G0 Z{focale+spessore}; G54) -> `prepare_print` -> `start_print`, tutto da software. Se la Snapmaker chiede un tocco per un job reale, lo decide il firmware: da misurare con un job laser reale (serve il tuo ok per l'accensione).
+
 ## Cosa fare ora (in ordine)
 1. **Task zero** sulla macchina/RPi (Tommy esegue, tu prepari lo script). Seguire la sua skill `ai-intuition`: prima di strumentare, scrivere affermazione sintetica + bracci + predizioni `pending`, poi il controllo più economico. Le 11 previsioni sono in SPEC.md → "Task zero". Punti caldi: modello/RAM RPi 5, firmware A250, connessione usata con Luban, **previsione 11 (Start touchscreen)**, tempo di segmentazione, fps watchdog visivo, movimenti incrementali, ripetibilità sensore utensile.
 2. Schema v0 del Job Spec (primitive E1.0 + tipo `calibration` + contorno del pezzo) + contract test.

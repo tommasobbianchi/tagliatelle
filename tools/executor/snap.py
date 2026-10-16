@@ -12,7 +12,7 @@ task-manager/workers/heartBeat.ts, 2025-05 master):
   snap.py prepare FILE [--hold SECONDS]   upload for the touchscreen, keep the session alive, never starts it
 Token: first line of $SNAP_TOKEN_FILE (default ~/tagliatelle-exec/app/snap_token, mode 600).
 """
-import json, os, sys, threading, time, urllib.request, uuid
+import http.client, io, json, os, sys, threading, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 
 HOST = os.environ.get("SNAP_HOST", "")  # set SNAP_HOST to the printer IP
@@ -20,10 +20,46 @@ BASE = "http://%s:8080/api/v1" % HOST
 TOKEN_FILE = Path(os.environ.get("SNAP_TOKEN_FILE", "~/tagliatelle-exec/app/snap_token")).expanduser()
 
 
-def _req(path, data=None, timeout=5, headers=None):
-    r = urllib.request.Request(BASE + path, data=data, headers=headers or {})
-    with urllib.request.urlopen(r, timeout=timeout) as f:
-        return f.read().decode()
+class _Conn:
+    """One keep-alive connection (measured on the A250: new connection per call = 2/80 timeouts and a 1.15 s p90 from
+    SYN retransmits; keep-alive = 0/80, p90 0.46 s).  Retry once when it is safe: any GET, or a POST whose reused
+    connection was already closed by the peer (the request never reached the machine)."""
+    def __init__(self):
+        self.c, self.lock = None, threading.Lock()
+
+    def close(self):
+        if self.c:
+            self.c.close()
+        self.c = None
+
+    def req(self, method, path, data, timeout, headers):
+        assert HOST, "set SNAP_HOST to the printer IP"
+        with self.lock:
+            for attempt in (0, 1):
+                reused = self.c is not None
+                try:
+                    if not reused:
+                        self.c = http.client.HTTPConnection(HOST, 8080, timeout=timeout)
+                    self.c.sock.settimeout(timeout) if self.c.sock else setattr(self.c, "timeout", timeout)
+                    self.c.request(method, "/api/v1" + path, body=data, headers=headers)
+                    r = self.c.getresponse()
+                    body = r.read()
+                    break
+                except (OSError, http.client.HTTPException) as e:
+                    self.close()
+                    safe = method == "GET" or (reused and isinstance(e, (ConnectionError, http.client.RemoteDisconnected)))
+                    if attempt or not safe:
+                        raise
+            if r.status >= 400:
+                raise urllib.error.HTTPError(BASE + path, r.status, r.reason, r.headers, io.BytesIO(body))
+            return body.decode()
+
+
+_MAIN, _HB = _Conn(), _Conn()   # the heartbeat has its own connection so a 60 s upload never starves it
+
+
+def _req(path, data=None, timeout=6, headers=None, conn=None):
+    return (conn or _MAIN).req("POST" if data is not None else "GET", path, data, timeout, headers or {})
 
 
 def post_form(path, **kw):
@@ -54,12 +90,12 @@ class Snap:
     def _beat(self):
         while not self._stop.wait(2.0):       # Luban: 2 s; silence > 8 s = offline
             try:
-                self.status()
+                self.status(conn=_HB)
             except Exception as e:             # fail loud, not silent: the caller sees .last_error
                 self.last_error = repr(e)
 
-    def status(self):
-        return json.loads(_req("/status?token=%s&%d" % (self.token, time.time() * 1000), timeout=3))
+    def status(self, conn=None):
+        return json.loads(_req("/status?token=%s&%d" % (self.token, time.time() * 1000), timeout=6, conn=conn))
 
     def prepare(self, path, type_="Laser"):
         p = Path(path)
