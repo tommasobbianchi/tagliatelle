@@ -62,6 +62,9 @@ Codice: `tools/executor/` (snap.py, home.py, move.py, laser_cam.py, camera.py, c
 
 - Luban (ConnectionManager.startGcode, ramo Wi-Fi/HTTP SM2) per il laser fa: `execute_code` (G53; G0 Z{focale+spessore}; G54) -> `prepare_print` -> `start_print`, tutto da software. Se la Snapmaker chiede un tocco per un job reale, lo decide il firmware: da misurare con un job laser reale (serve il tuo ok per l'accensione).
 
+- 2026-10-16 sera: conferma fisica = tocco su Yes alla richiesta di connessione con token NUOVO, solo per job che attivano laser/fresa (M3/M4 con S>0, scansione deterministica del G-code finale); il resto è autonomo. Misurato: `snap.new_session()` ha fatto comparire la richiesta, accettata in 13 s, heartbeat ok, disconnect pulito. A sessione aperta lo schermo mostra solo Disconnect (nessuna pagina file/Start). Segnale della macchina: -73 dBm (debole nonostante le barre piene). Allarmi: `tools/executor/run_alerted.sh` (Telegram + telefono Pixel via `~/.claude/scripts/ring-phone` + voce sullo speaker del Pi). `snap.py` ora usa keep-alive (0 errori in 301 s).
+- Da fare: compilatore/simulatore (E1.0), resolver `center_on_workpiece`, classificatore job «attivo», test con un job laser reale (serve il tuo ok), ripetitore/AP vicino alla macchina o USB seriale.
+
 ## Cosa fare ora (in ordine)
 1. **Task zero** sulla macchina/RPi (Tommy esegue, tu prepari lo script). Seguire la sua skill `ai-intuition`: prima di strumentare, scrivere affermazione sintetica + bracci + predizioni `pending`, poi il controllo più economico. Le 11 previsioni sono in SPEC.md → "Task zero". Punti caldi: modello/RAM RPi 5, firmware A250, connessione usata con Luban, **previsione 11 (Start touchscreen)**, tempo di segmentazione, fps watchdog visivo, movimenti incrementali, ripetibilità sensore utensile.
 2. Schema v0 del Job Spec (primitive E1.0 + tipo `calibration` + contorno del pezzo) + contract test.

@@ -106,6 +106,31 @@ class Snap:
         return post_form("/disconnect", token=self.token)
 
 
+def new_session(wait=120, say=print):
+    """Per-job physical confirmation (SPEC, Avvio): a FRESH token every time, kept in memory only.
+    /connect with an empty token -> new token; presenting it once raises 'Wi-Fi Connection Request' on the touchscreen;
+    only the owner's tap on Yes makes /status answer.  Returns a connected Snap (heartbeat running) or raises
+    TimeoutError when nobody tapped Yes within `wait` s.  `say` is called once, when the owner must act."""
+    r = json.loads(post_form("/connect", token=""))
+    tok = r["token"]
+    s = Snap(token=tok)
+    try:
+        post_form("/connect", token=tok)
+    except Exception as e:
+        pass                                  # measured: the answer may be empty/odd until accepted; the prompt is up
+    say(">>> RICHIESTA DI AUTORIZZAZIONE: tocca Sì sullo schermo della Snapmaker")
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        time.sleep(2)
+        try:
+            s.status()                        # empty/non-JSON until accepted (measured); also the heartbeat meanwhile
+        except Exception:
+            continue
+        threading.Thread(target=s._beat, daemon=True).start()
+        return s
+    raise TimeoutError("nobody tapped Yes on the machine within %d s" % wait)
+
+
 def pair(wait=300):
     """Luban's first-contact flow: connect with an EMPTY token -> the touchscreen asks the user to allow it ->
     reconnect with the token it returned until the machine answers with its series.
