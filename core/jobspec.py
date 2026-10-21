@@ -5,8 +5,9 @@ import hashlib, json
 from typing import Annotated, Literal, Union
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 BED_MM = 250.0   # A250 usable area; the module descriptor will narrow this per plugin
+FOCAL_Z_MM = 220.0  # A250 max Z (measured in task zero); depth is relative to focus
 
 
 class _M(BaseModel):
@@ -75,11 +76,26 @@ class SetPass(_M):                  # laser only; the safety validator re-checks
     passes: int = Field(ge=1, le=50)
 
 
-Op = Annotated[Union[AddText, AddRect, CenterOnWorkpiece, FitToWorkpiece, SetPass], Field(discriminator="op")]
+class SetTool(_M):                  # E1.0 vector: which tool-head/module applies; the module descriptor validates
+    op: Literal["set_tool"] = "set_tool"
+    target: str
+    tool: str                        # e.g. "laser_405_10w"; validated against module capabilities
+    focus_z_mm: float = Field(ge=0, le=FOCAL_Z_MM)   # focal height, default material thickness handling in compiler
+
+
+class SetDepth(_M):                 # E1.0 vector: engraving/cut depth (Z offset from focus), multi-pass depth
+    op: Literal["set_depth"] = "set_depth"
+    target: str
+    depth_mm: float = Field(ge=-50.0, le=50.0)      # negative = engrave below focus
+    multi_pass_depth_mm: float = Field(ge=0, le=50.0)  # 0 = single pass
+
+
+Op = Annotated[Union[AddText, AddRect, CenterOnWorkpiece, FitToWorkpiece, SetPass, SetTool, SetDepth],
+                Field(discriminator="op")]
 
 
 class JobSpec(_M):
-    schema_version: Literal["0.1.0"] = SCHEMA_VERSION
+    schema_version: Literal["0.2.0"] = SCHEMA_VERSION
     module: Literal["laser_405", "laser_1064", "cnc"]
     job_type: Literal["work", "calibration"]
     material: Material
@@ -96,7 +112,8 @@ class JobSpec(_M):
         if len(ids) != len(set(ids)):
             raise ValueError("duplicate object id")
         for o in self.ops:
-            if o.op in ("center_on_workpiece", "fit_to_workpiece", "set_pass") and o.target not in ids:
+            if o.op in ("center_on_workpiece", "fit_to_workpiece", "set_pass", "set_tool", "set_depth") \
+                    and o.target not in ids:
                 raise ValueError("%s targets unknown object %r" % (o.op, o.target))
         return self
 
