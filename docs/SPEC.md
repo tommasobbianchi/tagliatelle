@@ -96,6 +96,22 @@ La camera misura l'area di lavoro e la forma del pezzo, e l'omografia pixel→mm
 - Supporto camera per treppiede: filetto 1/4"-20 UNC femmina modellato nella plastica con gioco radiale di 0,1 mm (nessun dado), asse verticale, parete di 78 mm con sede per la scheda e due fori pilota M2. Sorgente `camera_mount_v3.py` (CadQuery; la v2 con scheda 61 mm era troppo corta), provino del filetto `thread_test` di 12 mm. In stampa; se la vite è stretta si porta `THREAD_CLR` a 0,15–0,2 mm.
 - Misure della scheda: lunghezza 62,2 mm (misurata); larghezza 10 mm e interasse fori 5,5 mm prese dalle foto, da verificare con il calibro.
 
+**Scansione 3D grossolana (decisione 21 ottobre 2026):**
+
+La camera 2D resta la fonte del contorno planare e dell'omografia. Accanto ad essa si aggiunge un **sensore ToF a matrice ST VL53L8CX** (8×8 zone, 45° di campo, 4 m, risoluzione 1 mm) per ottenere una **mappa di profondità (Z) grossolana** del pezzo: classifica zone piene/vuote, quota relativa e profilo di altezza.
+
+- **Montaggio:** fisso accanto alla camera ELP sul braccio, ~330 mm dal piano, perpendicolare, campo 45° ≈ 273 mm che copre il piano 250×250. Scheda carrier Pololu #3419 (≈ $25) con regolatori e livellatori di livello, I²C sull'RPi 5 a 3,3 V; l'API ST usa >90 KB di memoria programma (irrilevante sul Pi).
+- **Fusione:** la griglia 8×8 viene allineata alla stessa omografia pixel→mm della camera 2D; il contorno planare (2D) e la profondità (Z) condividono la stessa griglia. Il risultato è una nuvola di punti 3D a ~31 mm di passo in una singola posa.
+- **Niente montaggio sul gantry (scelta 21 ott 2026):** il montaggio è **fisso** accanto alla camera. Il gantry cambia utensile (laser 405, laser 1064, CNC), quindi ogni fissaggio del sensore alla testa richiederebbe un supporto diverso per utensile, non riutilizzabile. La densificazione a griglia con il sensore sul gantry è perciò **esclusa**; si accetta il passo ~31 mm della singola posa fissa.
+- **Fallback:** VL53L5CX (stesso 8×8, più supporto community) se l'L8CX non è disponibile; si esclude il TMF8828 (≤4×4, campo stretto) e le camere dense Sony IMX556 / Infineon S3121 / RealSense D405 (costo e ingombro sproporzionati per una scansione grossolana, e non "accanto" alla 2D).
+
+**Calibrazione del ToF (21 ottobre 2026):**
+
+Il ToF ha errori sistematici di distanza (bias, wiggle, walk error) che dipendono da distanza e riflettanza. La calibrazione si divide in due parti indipendenti:
+
+- **Registrazione spaziale (zone → pixel → mm):** i **marker ArUco esistenti** (tile 36×36, ID 0–4, 29,94 mm calibro) sono visti sia dalla camera ELP sia dalla griglia 8×8: sono i fiducial condivisi per mappare ogni zona ToF sull'omografia pixel→mm già usata dalla 2D. Non serve nuovo hardware né nuovi pattern; si riusa la stessa logica di manutenzione (re-registrare se i tile si spostano).
+- **Calibrazione di range (distanza assoluta):** **blocco a gradini stampato** (`hardware/tof_calib/step_block.py` → `step_block.step/.stl`), 4 gradini a quota nominale 10/20/30/45 mm sopra il letto, ingombro 240×200 mm. Ogni gradino dà una quota nota in una sola posa; si confronta la Z misurata con le quote **misurate al calibro** (non nominali). Il blocco va stampato in filamento matte (il nero lucido e il glossy falsano la distanza). I marker non bastano per il range: sono un solo piano a una sola quota.
+
 ## Materiali
 
 I parametri che arrivano al laser vengono solo da file YAML approvati e versionati; lo storico e l'apprendimento stanno in un database a fianco e non li modificano di nascosto.
