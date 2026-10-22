@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f6f8;
+  color: #1f2937;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button[aria-pressed="true"] {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+/* ---- start screen (four doors) ---- */
+
+.start {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 16px;
+}
+
+.start .door-blurb {
+  margin: 0 0 12px;
+  color: #475467;
+}
+
+.doors {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.door {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.door h3,
+.properties h3,
+.chat h3 {
+  margin: 12px 0 6px;
+}
+
+/* ---- workbench: fixed split on computer ---- */
+
+.workbench {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 340px;
+  grid-template-areas:
+    "bar bar bar"
+    "properties canvas chat";
+  gap: 8px;
+  height: 100vh;
+  padding: 8px;
+}
+
+.workbench-bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.workbench-label {
+  font-weight: 600;
+  flex: 1;
+}
+
+.preview-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.properties-panel,
+.chat-panel {
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.canvas-panel {
+  overflow: hidden;
+}
+
+.canvas-wrap {
+  position: relative;
+}
+
+.canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.canvas-overlay {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: 75%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #e4e7ec;
+  font-size: 12px;
+  color: #344054;
+  pointer-events: none;
+}
+
+/* ---- properties / chat details ---- */
+
+.object-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.object-list .op-kind {
+  color: #667085;
+  font-size: 11px;
+}
+
+.object-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.prop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.prop-caption {
+  font-weight: 600;
+  text-align: left;
+}
+
+.prop-table th,
+.prop-table td {
+  border: 1px solid #e4e7ec;
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.chat-log {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-log li {
+  padding: 8px 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.chat-log .msg-user {
+  background: #eff6ff;
+}
+
+.chat-form {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-form input {
+  flex: 1;
+  font: inherit;
+  padding: 7px 9px;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+}
+
+.hint {
+  color: #667085;
+  font-size: 13px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- collapsible on tablet ---- */
+@media (max-width: 900px) {
+  .doors {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+}
