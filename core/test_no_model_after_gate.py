@@ -23,6 +23,9 @@ CORE = Path(__file__).resolve().parent
 POST_GATE = [
     "compiler", "compiler2", "simulator", "gcode_scan", "materials",
     "grid", "replay", "resolver", "jobspec", "jobspec2",
+    # L3 kernel client + bridge ride behind the gate too (deterministic, offline, kernel-facing):
+    # the guard applies to them exactly as to the compiler/simulator surface above.
+    "l3_client", "l3_bridge",
 ]
 
 FORBIDDEN = ("openai", "anthropic", "transformers", "torch", "ollama", "langchain")
