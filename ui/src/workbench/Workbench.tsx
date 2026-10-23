@@ -1,6 +1,8 @@
 import type { Mode } from "../doors/config";
 import { findDoor } from "../doors/config";
 import type { JobSpec } from "../spec";
+import type { A1Document } from "../a1";
+import A1Overlay from "./A1Overlay";
 import Canvas from "./Canvas";
 import Chat, { type ChatMessage } from "./Chat";
 import Properties from "./Properties";
@@ -13,6 +15,9 @@ export interface WorkbenchProps {
   /** The one shared document: the same spec object for every door. */
   spec: JobSpec;
   onBack: () => void;
+  /** A1 import proposal (import door): rendered over the canvas as the
+   * preview + confirmation step. Absent → the classic workbench only. */
+  a1Doc?: A1Document | null;
 }
 
 /**
@@ -20,7 +25,12 @@ export interface WorkbenchProps {
  * overlay later, chat at the right, properties at the left. Layout fixed on
  * computer, collapsible on tablet (panels fold away with the toggle).
  */
-export default function Workbench({ mode, spec, onBack }: WorkbenchProps) {
+export default function Workbench({
+  mode,
+  spec,
+  onBack,
+  a1Doc = null,
+}: WorkbenchProps) {
   const door = findDoor(mode);
   const [preview, setPreview] = useState<PreviewLevel>("fast");
   const [selectedId, setSelectedId] = useState<string | null>(() =>
@@ -82,6 +92,9 @@ export default function Workbench({ mode, spec, onBack }: WorkbenchProps) {
 
       <main className="canvas-panel" data-testid="canvas-panel">
         <Canvas spec={spec} selectedId={selectedId} preview={preview} />
+        {a1Doc && (
+          <A1Overlay doc={a1Doc} />
+        )}
       </main>
 
       {chatOpen && (

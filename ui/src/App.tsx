@@ -7,6 +7,7 @@ import RelaunchDoor from "./doors/RelaunchDoor";
 import MaterialTestDoor from "./doors/MaterialTestDoor";
 import Workbench from "./workbench/Workbench";
 import { makeSampleSpec } from "./spec";
+import { makeSampleA1 } from "./a1";
 
 const DOOR_COMPONENTS: Record<Mode, ComponentType<DoorProps>> = {
   import: ImportDoor,
@@ -40,5 +41,12 @@ export default function App() {
     );
   }
 
-  return <Workbench mode={mode} spec={spec} onBack={() => setMode(null)} />;
+  // A1 (door "import"): the deterministic core proposal is confirmed over the
+  // preview. Until the Python → UI data channel exists, the sample document
+  // stands in for the core's import_svg output (identical contract shape).
+  const a1Doc = mode === "import" ? makeSampleA1() : null;
+
+  return (
+    <Workbench mode={mode} spec={spec} onBack={() => setMode(null)} a1Doc={a1Doc} />
+  );
 }

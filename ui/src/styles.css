@@ -115,6 +115,7 @@ button[aria-pressed="true"] {
 
 .canvas-panel {
   overflow: hidden;
+  position: relative;
 }
 
 .canvas-wrap {
@@ -245,4 +246,160 @@ button[aria-pressed="true"] {
     height: auto;
     min-height: 100vh;
   }
+}
+
+/* ---- A1 preview overlay (door "import") ---------------------------------- */
+
+.a1-overlay {
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* the canvas underneath stays interactive */
+}
+
+.a1-overlay .a1-legend,
+.a1-overlay .a1-confirm,
+.a1-overlay button {
+  pointer-events: auto;
+}
+
+.a1-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+}
+
+.a1-path-open {
+  filter: drop-shadow(0 0 1.5px #dc2626);
+}
+
+.a1-badge circle {
+  fill: #111827;
+  stroke: #fff;
+  stroke-width: 0.4;
+}
+
+.a1-badge text {
+  fill: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+}
+
+/* outer contour: the same badge, in the accent red ("per ultima") */
+.a1-profile-outer .a1-badge circle {
+  fill: #b91c1c;
+}
+
+.a1-closed-marker circle {
+  fill: #059669;
+  stroke: #fff;
+  stroke-width: 0.3;
+}
+
+.a1-open-marker circle {
+  fill: #dc2626;
+  stroke: #fff;
+  stroke-width: 0.3;
+}
+
+.a1-open-marker text {
+  fill: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+}
+
+.a1-legend {
+  align-self: flex-end;
+  max-width: 250px;
+  padding: 8px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.a1-legend h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #475467;
+}
+
+.a1-legend ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.a1-layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.a1-chip {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.a1-layer-op {
+  font-weight: 600;
+}
+
+.a1-layer-settings {
+  margin-left: auto;
+  color: #667085;
+}
+
+.a1-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-end;
+  padding: 8px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.a1-confirm.a1-confirmed {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.a1-dims {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.a1-state {
+  font-size: 12px;
+  color: #667085;
+}
+
+.a1-confirm.a1-confirmed .a1-state {
+  color: #047857;
+  font-weight: 600;
+}
+
+.btn-confirmed {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
 }
