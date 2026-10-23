@@ -22,6 +22,7 @@ imports, no real network, no wall-clock-dependent values in the result.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import threading
@@ -38,7 +39,7 @@ if _TOOLS_DIR not in sys.path:
 from grid import generate_grid                       # noqa: E402
 from jobspec import FOCAL_Z_MM                        # noqa: E402
 from jobspec2 import JobSpec2, migrate_020_to_030, spec_hash2  # noqa: E402
-from materials import power_cap                     # noqa: E402
+from materials import power_cap, risk_block, MaterialLibrary  # noqa: E402
 from compiler2 import compile_jobspec2              # noqa: E402
 from replay import replay_gcode                     # noqa: E402
 from gcode_scan import is_active                    # noqa: E402
@@ -59,6 +60,8 @@ __all__ = [
     "choose_cell",
     "recipe_proposal",
     "gate_blockers2",
+    "safety_blockers",
+    "assert_preview_machine_parity",
     "build_spec",
     "safe_origin",
     "FakeA250Server",
@@ -182,6 +185,154 @@ def gate_blockers2(interview: dict, spec: JobSpec2) -> list[str]:
     if sp is not None and sp.power_pct > cap:
         out.append("laser power %.0f%% exceeds the %s cap %.0f%%" % (sp.power_pct, spec.material.category, cap))
     return out
+
+
+# ---------------------------------------------------------------------------
+# SPEC §10 #4 — safety refusals (all *pre-machine* gate blockers)
+# ---------------------------------------------------------------------------
+def _has_declaration(interview: dict) -> bool:
+    """True if the interview carries a non-empty human declaration for a risky/forbidden material."""
+    for k in ("declaration", "risk_declaration", "confirmed_risk"):
+        v = interview.get(k)
+        if isinstance(v, str) and v.strip():
+            return True
+    mat = interview.get("material")
+    if isinstance(mat, dict):
+        d = mat.get("declaration")
+        if isinstance(d, str) and d.strip():
+            return True
+    return False
+
+
+def _emits(spec: JobSpec2) -> bool:
+    """Whether the job will fire the laser (a `set_pass` with energy > 0)."""
+    sp = _set_pass_of(spec)
+    return sp is not None and sp.power_pct is not None and sp.power_pct > 0
+
+
+def safety_blockers(interview: dict, spec: JobSpec2) -> list[str]:
+    """SPEC §10 #4 safety refusals — each is a *pre-machine* gate blocker (a refusal).
+
+    In stable order:
+      1. `unknown_material` — the material id is not a registered library material;
+      2. `risk_blocked_without_declaration` — a risky/forbidden material with no human declaration;
+      3. `power_above_cap` — requested laser power exceeds the category cap;
+      4. `emission_denied_without_user` — an emitting job with no user-present confirmation
+         (the approval gate must stay unconfirmed for emission to be allowed).
+
+    Reuses the L1 materials logic (`risk_block`, `power_cap`, the `MaterialLibrary` registry).
+    Returns a list of labelled blockers; empty = all clear. Deterministic, pre-machine only.
+    """
+    mat = interview.get("material") or {}
+    block: list[str] = []
+
+    # 1. unknown / unregistered material (refused on the id we cannot verify in the library)
+    library = interview.get("material_library")
+    if library is None:
+        library = MaterialLibrary.from_seed()
+    mid = mat.get("id") or ""
+    if not mid or (mid not in library):
+        block.append("unknown_material: material %r is not a registered material (the id must be declared in the library)" % (mid,))
+
+    # 2. risky/forbidden category blocked without a declaration (L1 risk logic)
+    if spec.material.category in ("risky", "forbidden"):
+        reasons = risk_block(dict(mat))
+        if not _has_declaration(interview):
+            head = reasons[0] if reasons else "%s material requires an explicit declaration" % spec.material.category
+            block.append("risk_blocked_without_declaration: %s" % head)
+
+    # 3. power above the category cap (blocker)
+    cap = power_cap(spec.material.category)
+    sp = _set_pass_of(spec)
+    if sp is not None and sp.power_pct > cap:
+        block.append("power_above_cap: power %.0f%% exceeds the %s cap %.0f%%" % (sp.power_pct, spec.material.category, cap))
+
+    # 4. emission denied without the user present (the gate must stay unconfirmed)
+    if _emits(spec) and interview.get("user_present") is False:
+        block.append("emission_denied_without_user: emitting job but no user-present confirmation "
+                     "(the approval gate cannot be confirmed without the user)")
+
+    return block
+
+
+# ---------------------------------------------------------------------------
+# SPEC §10 #2 — preview machine parity: the replay shows exactly the compiled trajectories
+# ---------------------------------------------------------------------------
+_INLINE_COMMENT = re.compile(r"\([^)]*\")" if False else r"\([^)]*\)")
+
+
+def _gcode_xy_moves(gcode: str) -> list[tuple[float, float]]:
+    """Absolute XY destination of every G0/G1 XY move, in program order.
+
+    Mirrors `replay.replay_gcode`'s coordinate tracking (G90/G91 relative/absolute, modal-only
+    commands ignored, inline comments stripped) so the two agree exactly on identical input.
+    """
+    x = y = 0.0
+    absolute = True
+    out: list[tuple[float, float]] = []
+    for raw in gcode.splitlines():
+        body = re.sub(r"\([^)]*\)", " ", raw.split(";", 1)[0]).strip()
+        if not body:
+            continue
+        letter = code = None
+        params: dict[str, float] = {}
+        for tok in body.split():
+            if not tok:
+                continue
+            if tok[0].upper() in ("G", "M") and tok[1:].isdigit():
+                if letter is None:
+                    letter = tok[0].upper()
+                    code = int(tok[1:])
+            elif tok[0].isalpha():
+                try:
+                    params[tok[0].upper()] = float(tok[1:])
+                except ValueError:
+                    pass
+        if letter == "G" and code == 90:
+            absolute = True
+        elif letter == "G" and code == 91:
+            absolute = False
+        elif letter == "G" and code in (0, 1):
+            if "X" not in params and "Y" not in params:
+                continue  # modal-only (e.g. bare G1 F... / G0 Z...), no XY move
+            tx = params["X"] if ("X" in params and absolute) else (x + params["X"] if "X" in params else x)
+            ty = params["Y"] if ("Y" in params and absolute) else (y + params["Y"] if "Y" in params else y)
+            out.append((tx, ty))
+            x, y = tx, ty
+    return out
+
+
+def _replay_xy_moves(replay) -> list[tuple[float, float]]:
+    """Flatten the replay's per-op moves into ordered (X, Y) destinations."""
+    moves: list[tuple[float, float]] = []
+    for op in replay.ops:
+        for m in op.moves:
+            moves.append((m.x2, m.y2))
+    return moves
+
+
+def assert_preview_machine_parity(gcode: str, replay, tol_mm: float = 1e-6) -> dict:
+    """SPEC §10 #2 — the replay shows *exactly* the compiled trajectories.
+
+    Verifies that every XY move in the compiled G-code appears in the replay at the same
+    coordinate, in the same program order, within `tol_mm`, and that the replay has no extra
+    moves. Deterministic: pure comparison of two sequences.
+
+    Returns `{"ok": bool, "diffs": list, "n_gcode": int, "n_replay": int}` where each diff is
+    `{"kind": "mismatch"|"extra_replay"|"missing_replay", "index": i, ...}` for diagnostics.
+    """
+    a = _gcode_xy_moves(gcode)
+    b = _replay_xy_moves(replay)
+    diffs: list[dict] = []
+    for i in range(max(len(a), len(b))):
+        if i >= len(a):
+            diffs.append({"kind": "extra_replay", "index": i, "replay": [b[i][0], b[i][1]]})
+        elif i >= len(b):
+            diffs.append({"kind": "missing_replay", "index": i, "gcode": [a[i][0], a[i][1]]})
+        elif abs(a[i][0] - b[i][0]) > tol_mm or abs(a[i][1] - b[i][1]) > tol_mm:
+            diffs.append({"kind": "mismatch", "index": i, "gcode": [a[i][0], a[i][1]],
+                          "replay": [b[i][0], b[i][1]]})
+    return {"ok": len(diffs) == 0, "diffs": diffs, "n_gcode": len(a), "n_replay": len(b)}
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +603,8 @@ def run_b3_fake(interview: dict) -> dict:
     passes = int(sp.passes) if sp is not None else 1
     cap = power_cap(spec.material.category)
 
-    blockers = gate_blockers2(interview, spec)
+    safety = safety_blockers(interview, spec)
+    blockers = gate_blockers2(interview, spec) + safety
     gate_blocked = len(blockers) > 0
 
     base = {
@@ -469,7 +621,7 @@ def run_b3_fake(interview: dict) -> dict:
         refusal = "refused before machine interaction; blockers: " + "; ".join(blockers)
         base.update({
             "ok": False,
-            "gate": {"blocked": True, "blockers": blockers, "power_pct": power_pct,
+            "gate": {"blocked": True, "blockers": blockers, "safety": safety, "power_pct": power_pct,
                      "power_cap": cap, "spec_hash2": spec_hash, "confirmed": False},
             "preview": None,
             "gcode": None,
@@ -487,8 +639,9 @@ def run_b3_fake(interview: dict) -> dict:
     replay = replay_gcode(gcode)
     active = is_active(gcode)
 
+    parity = assert_preview_machine_parity(gcode, replay)
     base.update({
-        "gate": {"blocked": False, "blockers": [], "power_pct": power_pct,
+        "gate": {"blocked": False, "blockers": [], "safety": safety, "power_pct": power_pct,
                  "power_cap": cap, "spec_hash2": spec_hash},
         "preview": {
             "ops": replay.ops,
@@ -497,6 +650,7 @@ def run_b3_fake(interview: dict) -> dict:
             "ok": replay.ok,
             "errors": list(replay.errors),
             "simulation": replay.simulation,
+            "parity": parity,
         },
         "gcode": gcode,
         "active_job": active,

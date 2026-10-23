@@ -26,6 +26,10 @@ class StopReason(enum.Enum):
     ALARM = "alarm"                          # the machine reported a fault in its status
     USER = "user"                            # operator / gate requested the halt
     LOST_LINK = "lost_link"                  # could not reach the machine at all
+    # SPEC §10 #3 fault injection: the four faults are distinct, stable stop reasons.
+    MOVED_MARKER = "moved_marker"            # a fiducial/marker drifted beyond the threshold
+    MOVED_WORKPIECE = "moved_workpiece"      # registered position vs current deviates beyond threshold
+    LOST_CAMERA = "lost_camera"              # camera/vision telemetry went unhealthy
 
 
 ALARM_STATUS_WORDS = frozenset({"ERROR", "ALARM", "ABORT", "ABORTED", "FAULT", "FAULTED", "CRITICAL"})
